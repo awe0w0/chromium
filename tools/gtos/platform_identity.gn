@@ -1,0 +1,8 @@
+# Use with --dotfile=tools/gtos/platform_identity.gn.
+# Keep the real Chromium build configuration; limit the graph to qualification.
+buildconfig = "//build/config/BUILDCONFIG.gn"
+root = "//tools/gtos:platform_identity_probe"
+default_args = {
+  is_debug = false
+  is_component_build = false
+}

@@ -11,6 +11,12 @@ declare_args() {
   use_ozone = is_chromeos || is_fuchsia || is_linux
 }
 
+if (is_gtos) {
+  assert(
+      !use_ozone,
+      "GTOS Ozone surface/input backend is not implemented. The Linux headless FileSurface is not a GTOS display backend.")
+}
+
 declare_args() {
   # Ozone extra platforms file path. Can be overridden to build out of
   # tree ozone platforms.

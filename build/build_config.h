@@ -16,7 +16,7 @@
 //
 //  Operating System:
 //    IS_AIX / IS_ANDROID / IS_ASMJS / IS_CHROMEOS / IS_FREEBSD / IS_FUCHSIA /
-//    IS_IOS / IS_IOS_MACCATALYST / IS_IOS_TVOS / IS_LINUX / IS_MAC /
+//    IS_GTOS / IS_IOS / IS_IOS_MACCATALYST / IS_IOS_TVOS / IS_LINUX / IS_MAC /
 //    IS_NETBSD / IS_OPENBSD / IS_QNX / IS_SOLARIS / IS_WATCHOS / IS_WIN
 //  Operating System family:
 //    IS_APPLE: IOS or MAC or IOS_MACCATALYST or IOS_TVOS or WATCHOS
@@ -65,7 +65,14 @@
 // IWYU pragma: always_keep
 
 // A set of macros to use for platform detection.
-#if defined(ANDROID)
+#if defined(__GTOS__)
+// GTOS has its own ABI. A cross-build never inherits the host OS or libc.
+#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(ANDROID) || \
+    defined(_WIN32) || defined(__APPLE__)
+#error GTOS cannot be combined with another target OS
+#endif
+#define OS_GTOS 1
+#elif defined(ANDROID)
 #define OS_ANDROID 1
 #elif defined(__APPLE__)
 // Only include TargetConditionals after testing ANDROID as some Android builds
@@ -193,6 +200,12 @@
 #define BUILDFLAG_INTERNAL_IS_FUCHSIA() (1)
 #else
 #define BUILDFLAG_INTERNAL_IS_FUCHSIA() (0)
+#endif
+
+#if defined(OS_GTOS)
+#define BUILDFLAG_INTERNAL_IS_GTOS() (1)
+#else
+#define BUILDFLAG_INTERNAL_IS_GTOS() (0)
 #endif
 
 #if defined(OS_IOS)
@@ -382,6 +395,13 @@
 // Type detection for wchar_t.
 #if defined(OS_WIN)
 #define WCHAR_T_IS_16_BIT
+#elif defined(OS_GTOS)
+// The GTOS Clang ABI uses 32-bit wchar_t; reject an incompatible toolchain.
+#if !defined(__WCHAR_MAX__) || \
+    (__WCHAR_MAX__ != 0x7fffffff && __WCHAR_MAX__ != 0xffffffff)
+#error GTOS requires a 32-bit wchar_t ABI
+#endif
+#define WCHAR_T_IS_32_BIT
 #elif defined(OS_FUCHSIA)
 #define WCHAR_T_IS_32_BIT
 #elif defined(OS_POSIX) && defined(COMPILER_GCC) && defined(__WCHAR_MAX__) && \

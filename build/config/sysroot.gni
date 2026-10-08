@@ -20,6 +20,12 @@ declare_args() {
   sysroot = ""
 }
 
+if (is_gtos) {
+  assert(
+      !use_sysroot && sysroot == "" && target_sysroot == "",
+      "GTOS qualification is freestanding; a native SDK has not been qualified. Do not use a Linux sysroot for GTOS.")
+}
+
 if (sysroot == "") {
   if (current_os == target_os && current_cpu == target_cpu &&
       target_sysroot != "") {

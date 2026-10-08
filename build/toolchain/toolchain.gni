@@ -47,6 +47,10 @@ declare_args() {
 # Extension for shared library files (including leading dot).
 if (is_apple) {
   shlib_extension = ".dylib"
+} else if (is_gtos) {
+  # ELF file naming only. GTOS currently has no qualified shared-library loader.
+  # The GTOS freestanding toolchain deliberately has no solink tool.
+  shlib_extension = ".so"
 } else if (is_posix || is_fuchsia) {
   shlib_extension = ".so"
 } else if (is_win) {
@@ -71,7 +75,7 @@ if (host_os == "mac") {
 }
 
 # Prefix for shared library files.
-if (is_posix || is_fuchsia) {
+if (is_posix || is_fuchsia || is_gtos) {
   shlib_prefix = "lib"
 } else {
   shlib_prefix = ""

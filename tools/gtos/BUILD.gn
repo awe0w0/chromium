@@ -1,0 +1,65 @@
+# Copyright 2026 The Chromium Authors
+# Use of this source code is governed by a BSD-style license in LICENSE.
+import("//build/config/ozone.gni")
+import("//build/config/sysroot.gni")
+
+assert(is_gtos && !is_linux && !is_posix)
+assert(!use_sysroot && sysroot == "")
+assert(!use_ozone && !ozone_platform_headless && !ozone_platform_x11 &&
+       !ozone_platform_wayland && !ozone_platform_drm)
+assert(current_toolchain == "//build/toolchain/gtos:clang_$current_cpu")
+
+if (current_cpu == "x86") {
+  executable("platform_identity_probe") {
+    no_default_deps = true
+    use_libcxx_modules = false
+
+    # This qualification does not use Chromium's unported C++/POSIX runtime.
+    configs = []
+    configs = [ "//build/config/gtos:platform" ]
+    sources = [
+      "platform_identity.c",
+      "start.s",
+    ]
+    ldflags = [
+      "-T" + rebase_path("identity.ld", root_build_dir),
+      "--build-id=none",
+    ]
+    inputs = [ "identity.ld" ]
+  }
+} else {
+  source_set("platform_identity_probe") {
+    # x64 has no published guest userspace ABI; produce target objects only.
+    configs = []
+    configs = [ "//build/config/gtos:platform" ]
+    sources = [ "platform_identity.c" ]
+  }
+}
+
+generated_file("platform_manifest") {
+  outputs = [ "$root_build_dir/gtos-platform.json" ]
+  output_conversion = "json"
+  contents = {
+    platform = "gtos"
+    cpu = current_cpu
+    is_linux = false
+    is_posix = false
+    qualification_only = true
+    use_linux_sysroot = false
+    use_ozone = false
+    shared_library_loader_ready = false
+    browser_backend_ready = false
+    userspace_abi = 0
+    if (current_cpu == "x86") {
+      userspace_abi = 1
+    }
+    missing_backends = [
+      "libc/c++",
+      "VM",
+      "threads/TLS/FP",
+      "IPC",
+      "Ozone",
+      "network/DNS/TLS",
+    ]
+  }
+}

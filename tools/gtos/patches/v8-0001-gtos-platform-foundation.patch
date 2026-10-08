@@ -1,0 +1,148 @@
+diff --git a/BUILD.gn b/BUILD.gn
+index 3e22cafa..468d3586 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -4,6 +4,12 @@
+ 
+ # LINT.IfChange
+ 
++if (current_os == "gtos") {
++  assert(
++      false,
++      "GTOS V8 runtime backend is not implemented: qualified libc/C++, VM, thread/TLS/FP, entropy and file services are required. Host snapshot tools must retain the host OS.")
++}
++
+ import("//build/config/android/config.gni")
+ import("//build/config/arm.gni")
+ import("//build/config/c++/c++.gni")
+@@ -1132,6 +1138,7 @@ external_v8_defines = [
+   "V8_HAVE_TARGET_OS",
+   "V8_TARGET_OS_ANDROID",
+   "V8_TARGET_OS_FUCHSIA",
++  "V8_TARGET_OS_GTOS",
+   "V8_TARGET_OS_IOS",
+   "V8_TARGET_OS_LINUX",
+   "V8_TARGET_OS_MACOS",
+@@ -1205,7 +1212,12 @@ if (v8_shortcut_strings_in_minor_ms) {
+ # mksnapshot. We additionally set V8_HAVE_TARGET_OS to determine that a
+ # target OS has in fact been set; otherwise we internally assume that target
+ # OS == host OS (see v8config.h).
+-if (target_os == "android") {
++if (target_os == "gtos") {
++  enabled_external_v8_defines += [
++    "V8_HAVE_TARGET_OS",
++    "V8_TARGET_OS_GTOS",
++  ]
++} else if (target_os == "android") {
+   enabled_external_v8_defines += [ "V8_HAVE_TARGET_OS" ]
+   enabled_external_v8_defines += [ "V8_TARGET_OS_ANDROID" ]
+ } else if (target_os == "fuchsia") {
+diff --git a/include/v8config.h b/include/v8config.h
+index b7aeeade..aebeff0d 100644
+--- a/include/v8config.h
++++ b/include/v8config.h
+@@ -25,7 +25,9 @@ path. Add it with -I<path> to the command line
+ // clang-format off
+ 
+ // Platform headers for feature detection below.
+-#if defined(__ANDROID__)
++#if defined(__GTOS__)
++// Do not include Linux libc feature headers for a GTOS target.
++#elif defined(__ANDROID__)
+ # include <sys/cdefs.h>
+ #elif defined(__APPLE__)
+ # include <TargetConditionals.h>
+@@ -81,6 +83,7 @@ path. Add it with -I<path> to the command line
+ //  V8_OS_DRAGONFLYBSD  - DragonFlyBSD
+ //  V8_OS_FREEBSD       - FreeBSD
+ //  V8_OS_FUCHSIA       - Fuchsia
++//  V8_OS_GTOS          - GTOS, independent guest ABI
+ //  V8_OS_LINUX         - Linux (Android, ChromeOS, Linux, ...)
+ //  V8_OS_DARWIN        - Darwin (macOS, iOS)
+ //  V8_OS_MACOS         - macOS
+@@ -96,7 +99,12 @@ path. Add it with -I<path> to the command line
+ //  V8_OS_WIN           - Microsoft Windows
+ //  V8_OS_ZOS           - z/OS
+ 
+-#if defined(__ANDROID__)
++#if defined(__GTOS__)
++# define V8_OS_GTOS 1
++# define V8_OS_STRING "gtos"
++// POSIX services require a real GTOS runtime; never infer them from Linux.
++
++#elif defined(__ANDROID__)
+ # define V8_OS_ANDROID 1
+ # define V8_OS_LINUX 1
+ # define V8_OS_POSIX 1
+@@ -192,6 +200,7 @@ path. Add it with -I<path> to the command line
+ //  V8_TARGET_OS_FUCHSIA
+ //  V8_TARGET_OS_IOS
+ //  V8_TARGET_OS_TVOS (also sets V8_TARGET_OS_IOS)
++//  V8_TARGET_OS_GTOS
+ //  V8_TARGET_OS_LINUX
+ //  V8_TARGET_OS_MACOS
+ //  V8_TARGET_OS_WIN
+@@ -206,6 +215,7 @@ path. Add it with -I<path> to the command line
+   && !defined(V8_TARGET_OS_FUCHSIA) \
+   && !defined(V8_TARGET_OS_IOS) \
+   && !defined(V8_TARGET_OS_TVOS) \
++  && !defined(V8_TARGET_OS_GTOS) \
+   && !defined(V8_TARGET_OS_LINUX) \
+   && !defined(V8_TARGET_OS_MACOS) \
+   && !defined(V8_TARGET_OS_WIN) \
+@@ -219,6 +229,7 @@ path. Add it with -I<path> to the command line
+   || defined(V8_TARGET_OS_FUCHSIA) \
+   || defined(V8_TARGET_OS_IOS) \
+   || defined(V8_TARGET_OS_TVOS) \
++  || defined(V8_TARGET_OS_GTOS) \
+   || defined(V8_TARGET_OS_LINUX) \
+   || defined(V8_TARGET_OS_MACOS) \
+   || defined(V8_TARGET_OS_WIN) \
+@@ -227,6 +238,9 @@ path. Add it with -I<path> to the command line
+ # endif
+ 
+ // Fall back to the detected host OS.
++#ifdef V8_OS_GTOS
++# define V8_TARGET_OS_GTOS
++#endif
+ #ifdef V8_OS_ANDROID
+ # define V8_TARGET_OS_ANDROID
+ #endif
+@@ -257,12 +271,22 @@ path. Add it with -I<path> to the command line
+ 
+ #endif  // V8_HAVE_TARGET_OS
+ 
++#if defined(V8_TARGET_OS_GTOS) && (defined(V8_TARGET_OS_ANDROID) || \
++    defined(V8_TARGET_OS_FUCHSIA) || defined(V8_TARGET_OS_IOS) || \
++    defined(V8_TARGET_OS_TVOS) || defined(V8_TARGET_OS_LINUX) || \
++    defined(V8_TARGET_OS_MACOS) || defined(V8_TARGET_OS_WIN) || \
++    defined(V8_TARGET_OS_CHROMEOS))
++#error GTOS cannot be combined with another V8 target OS
++#endif
++
+ #if defined(V8_TARGET_OS_ANDROID)
+ # define V8_TARGET_OS_STRING "android"
+ #elif defined(V8_TARGET_OS_FUCHSIA)
+ # define V8_TARGET_OS_STRING "fuchsia"
+ #elif defined(V8_TARGET_OS_IOS)
+ # define V8_TARGET_OS_STRING "ios"
++#elif defined(V8_TARGET_OS_GTOS)
++# define V8_TARGET_OS_STRING "gtos"
+ #elif defined(V8_TARGET_OS_LINUX)
+ # define V8_TARGET_OS_STRING "linux"
+ #elif defined(V8_TARGET_OS_MACOS)
+@@ -288,7 +312,13 @@ path. Add it with -I<path> to the command line
+ //   ...
+ //  #endif
+ 
+-#if defined (_MSC_VER)
++#if defined(V8_OS_GTOS)
++#if defined(__GLIBC__) || defined(__GNU_LIBRARY__) || defined(__BIONIC__) || \
++    defined(__UCLIBC__) || defined(_MSC_VER)
++#error GTOS native headers require a qualified GTOS C++ SDK, not host libc
++#endif
++// The native GTOS libc/C++ backend has not been implemented or qualified yet.
++#elif defined (_MSC_VER)
+ # define V8_LIBC_MSVCRT 1
+ #elif defined(__BIONIC__)
+ # define V8_LIBC_BIONIC 1
